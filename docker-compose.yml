@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "5000:5000"
+    expose:
+      - "8001"
+    labels:
+      - autoscale_service=backend
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    ports:
+      - "9090:9090"
+
+  autoscaler:
+    build:
+      context: ./autoscaler
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - PROM_URL=http://prometheus:9090
+      - DOCKER_IMAGE=backend
+      - CPU_THRESHOLD=0.7
+      - MIN_INSTANCES=1
+      - MAX_INSTANCES=3
+      - CHECK_INTERVAL=10
