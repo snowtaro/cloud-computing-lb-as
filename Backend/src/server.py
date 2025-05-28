@@ -1,9 +1,11 @@
 from flask import Flask
 from prometheus_client import start_http_server, Counter
+from flask_cors import CORS 
 
 app = Flask(__name__)
+CORS(app) 
 
-# Prometheus 메트릭
+
 REQUEST_COUNT = Counter('http_requests_total', 'Total HTTP Requests')
 
 @app.route('/')
@@ -22,4 +24,3 @@ if __name__ == '__main__':
 
     flask_thread = Thread(target=run_flask)
     flask_thread.start()
-

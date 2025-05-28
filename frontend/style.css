@@ -1,0 +1,74 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+.container {
+  display: flex;
+  height: 100vh;
+}
+
+/* 사이드 메뉴 */
+.sidebar {
+  width: 220px;
+  background-color: #2c3e50;
+  color: white;
+  padding: 20px;
+}
+
+.sidebar h2 {
+  font-size: 18px;
+  margin-bottom: 15px;
+}
+
+.sidebar button {
+  width: 100%;
+  margin: 8px 0;
+  padding: 10px;
+  background-color: #34495e;
+  border: none;
+  color: white;
+  cursor: pointer;
+  border-radius: 4px;
+  text-align: left;
+}
+
+.sidebar button:hover {
+  background-color: #1abc9c;
+}
+
+.sidebar #status {
+  margin-top: 20px;
+  font-size: 14px;
+}
+
+/* 메인 영역 */
+.main {
+  flex-grow: 1;
+  padding: 20px;
+  background-color: #ecf0f1;
+  overflow-y: auto;
+}
+
+.dashboard {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.panel {
+  background: white;
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: none;
+}
+
+iframe {
+  border: none;
+  border-radius: 6px;
+}
