@@ -1,5 +1,6 @@
 import requests
 import docker
+import os
 
 class PrometheusClient:
     def __init__(self, base_url: str):
@@ -23,9 +24,17 @@ class DockerManager:
         return self.client.containers.list(filters={'label': label})
 
     def run_container(self, image: str, label: str):
+        project = os.getenv('COMPOSE_PROJECT_NAME', 'pnu_cloud_computing')
+        service = label
+        compose_labels = {
+            'com.docker.compose.project': project,
+            'com.docker.compose.service': service,
+            'com.docker.compose.oneoff': 'False',
+            'autoscale_service': label,
+        }
         return self.client.containers.run(
             image,
-            labels={'autoscale_service': label},
+            labels=compose_labels,
             detach=True
         )
 
