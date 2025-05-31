@@ -11,6 +11,21 @@ services:
       - "8001"
     labels:
       - autoscale_service=backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 2
+
+  load_balancer:
+      build:
+        context: ./load_balancer
+      image: load_balancer:latest
+      ports:
+        - "8080:8080"
+      depends_on:
+        - backend
+        - prometheus
 
   prometheus:
     image: prom/prometheus

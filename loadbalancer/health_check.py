@@ -1,35 +1,42 @@
-import requests
+import docker
 import time
-from typing import Dict
+from balancer import update_backend_servers
 
-class HealthChecker:
-    def __init__(self, targets: Dict[str, int], interval: int = 5, timeout: int = 2):
-        """
-        :param targets: {"http://127.0.0.1:8001": 0, "http://127.0.0.1:8002": 0}
-        :param interval: health check 간격 (초)
-        :param timeout: 요청 timeout 시간
-        """
-        self.targets = targets
-        self.interval = interval
-        self.timeout = timeout
-        self.healthy = {target: True for target in self.targets}
-
-    def check_once(self):
-        for target in self.targets:
+def check_servers(label='autoscale_service'):
+    client = docker.from_env()
+    while True:
+        containers = client.containers.list(filters={"label": label, "status": "running"})
+        servers = []
+        for container in containers:
+            ip = container.attrs['NetworkSettings']['IPAddress']
+            servers.append({
+                'host': f'http://{ip}:5000',
+                'status': 'unknown',  # Assume unknown initially
+                'latency': float('inf')  # Placeholder for latency
+            })
+        # 서버 상태 점검
+        for server in servers:
             try:
-                res = requests.get(f"{target}/health", timeout=self.timeout)
-                self.healthy[target] = (res.status_code == 200)
-            except Exception:
-                self.healthy[target] = False
+                import requests
+                start = time.time()
+                resp = requests.get(server['host'] + '/health', timeout=2)
+                end = time.time()
+                if resp.status_code == 200:
+                    server['status'] = 'healthy'
+                    server['latency'] = end - start
+                else:
+                    server['status'] = 'unhealthy'
+            except:
+                server['status'] = 'unhealthy'
+                server['latency'] = float('inf')
+                
+        update_backend_servers(servers)
+        print(f"Updated backend servers: {servers}")
+        
+        return servers
+        time.sleep(30)
 
-    def start_loop(self):
-        while True:
-            self.check_once()
-            print(f"[HealthCheck] 상태: {self.healthy}")
-            time.sleep(self.interval)
-
-    def is_healthy(self, target: str) -> bool:
-        return self.healthy.get(target, False)
-
-    def get_healthy_targets(self):
-        return [t for t, ok in self.healthy.items() if ok]
+def start_health_check():
+    import threading
+    t = threading.Thread(target=check_servers, daemon=True)
+    t.start()

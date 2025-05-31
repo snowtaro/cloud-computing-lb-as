@@ -1,33 +1,34 @@
-from flask import Flask, request, jsonify
-import requests
-from balancer import RoundRobinBalancer
+from flask import Flask, request
+from balancer import choose_backend, selection_mode
 
 app = Flask(__name__)
 
-# 백엔드 서버 리스트
-backend_servers = [
-    "http://127.0.0.1:5001",
-    "http://127.0.0.1:5002",
-    "http://127.0.0.1:5003"
-]
-
-balancer = RoundRobinBalancer(backend_servers)
-
-@app.route('/', methods=['GET', 'POST'])
-def load_balance():
-    target = balancer.get_next_server()
+@app.route('/')
+def route_request():
+    server = choose_backend()
+    if not server:
+        return "No healthy servers", 503
     try:
-        # 요청 전달
-        resp = requests.request(
-            method=request.method,
-            url=f"{target}{request.full_path}",
-            headers=request.headers,
-            data=request.get_data(),
-            allow_redirects=False
-        )
-        return (resp.content, resp.status_code, resp.headers.items())
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": str(e)}), 502
+        import requests
+        resp = requests.get(server['host'])
+        return resp.content, resp.status_code
+    except:
+        return "Backend error", 500
+
+@app.route('/set_mode/<mode>')
+def set_mode(mode):
+    from balancer import selection_mode
+    if mode in ['round_robin', 'latency']:
+        selection_mode = mode
+        return f"Selection mode set to {mode}", 200
+    else:
+        return "Invalid mode", 400
+
+@app.route('/health')
+def health():
+    return "OK", 200
 
 if __name__ == '__main__':
-    app.run(port=8080)
+    from health_check import start_health_check
+    start_health_check()  # 헬스체크 스레드 시작
+    app.run(host='0.0.0.0', port=5000)
