@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import Sidebar from '../components/Sidebar';
-import Sidebar2 from '../components/Sidebar2';
 import Overview from '../components/Overview';
 
 const Dashboard = () => {
-    const [activeMenu, setActiveMenu] = useState<string | null>(null);
+    const [activeMenu, setActiveMenu] = useState<string | null>('overview');
     const [status, setStatus] = useState('상태: 대기 중');
     const [isStressOn, setIsStressOn] = useState(false);
 
     const handleMenuClick = (menu: string) => {
-        setActiveMenu(prev => (prev === menu ? null : menu));
+        if (menu === 'test') {
+            toggleStressTest();
+        } else {
+            setActiveMenu(menu);
+        }
     };
 
     const toggleStressTest = async () => {
@@ -36,22 +39,14 @@ const Dashboard = () => {
 
     return (
         <div className="flex h-screen bg-gray-50">
-            <Sidebar onSelect={handleMenuClick} selected={activeMenu} />
-            <Sidebar2 visible={activeMenu === 'overview'} />
-
+            <Sidebar
+                onSelect={handleMenuClick}
+                selected={activeMenu}
+                isStressOn={isStressOn}
+            />
             <main className="flex-1 p-8 overflow-y-auto">
                 <div className="bg-white p-6 rounded shadow">
                     {activeMenu === 'overview' && <Overview />}
-
-                    <button
-                        className={`mt-4 px-4 py-2 rounded font-bold text-white ${
-                            isStressOn ? 'bg-gray-600 hover:bg-gray-700' : 'bg-red-500 hover:bg-red-600'
-                        }`}
-                        onClick={toggleStressTest}
-                    >
-                        {isStressOn ? '🛑 부하 중지' : '🔥 부하 테스트 시작'}
-                    </button>
-
                     <p className="text-sm text-gray-500 mt-4">{status}</p>
                 </div>
             </main>

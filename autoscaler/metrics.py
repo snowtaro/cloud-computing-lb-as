@@ -66,19 +66,23 @@ class DockerManager:
             num_cpus = len(second['cpu_stats']['cpu_usage'].get('percpu_usage', [])) or 1
             return (cpu_delta / system_delta) * num_cpus * 100.0
         return 0.0
-
+    
     def update_prometheus_targets(self, label: str):
         containers = self.list_containers(label)
-        targets = ["host.docker.internal:5000"]
+        targets = []
+
         for c in containers:
             ports = c.attrs['NetworkSettings']['Ports']
             if '5000/tcp' in ports and ports['5000/tcp']:
                 host_port = ports['5000/tcp'][0]['HostPort']
-                if host_port != "5000":
-                    targets.append(f"host.docker.internal:{host_port}")
+                if host_port == "5000":
+                    continue
+                targets.append(f"host.docker.internal:{host_port}")
+
         os.makedirs(os.path.dirname(FLASK_TARGET_PATH), exist_ok=True)
         with open(FLASK_TARGET_PATH, 'w') as f:
             json.dump([{"targets": targets, "labels": {"job": "flask-autoscaled"}}], f)
+
 
     def _is_fixed(self, container) -> bool:
         return str(container.labels.get('fixed')).lower() == 'true'
