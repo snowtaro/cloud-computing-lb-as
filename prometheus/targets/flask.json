@@ -1,0 +1,1 @@
+[{"targets": ["host.docker.internal:4769", "host.docker.internal:4441"], "labels": {"job": "flask-autoscaled"}}]

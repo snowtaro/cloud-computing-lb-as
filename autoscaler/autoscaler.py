@@ -16,7 +16,7 @@ class AutoScaler:
         docker_image: str,
         label: str = 'autoscale_service',
         cpu_threshold: float = 0.7,
-        min_instances: int = 1,
+        min_instances: int = 0,
         max_instances: int = 10,
         check_interval: int = 30
     ):
@@ -38,6 +38,7 @@ class AutoScaler:
         count = len(containers)
 
         # Ensure minimum instances immediately
+
         if count < self.min:
             logging.info(f"Instances below minimum ({count} < {self.min}). Scaling up.")
             self.dock.run_container(self.image, self.label)
@@ -92,6 +93,18 @@ class AutoScaler:
             if self.below_since is not None:
                 logging.debug("CPU rose above half-threshold, resetting scale-in timer.")
             self.below_since = None
+        if avg_cpu > (self.threshold * 100) and count < self.max:
+            logging.info("CPU above threshold. Scaling up by 1.")
+            self.dock.run_container(self.image, self.label)
+
+        elif avg_cpu < (self.threshold * 50) and count > self.min:
+            logging.info("CPU below half threshold. Scaling down by 1.")
+            for c in reversed(containers):
+                if not self.dock._is_fixed(c):
+                    self.dock.remove_container(c)
+                    break
+            else:
+                logging.info("No removable container found (only fixed ones).")
 
     def run(self) -> None:
         logging.info("Starting AutoScaler loop.")
