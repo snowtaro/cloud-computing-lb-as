@@ -1,2 +1,5 @@
 flask
 prometheus_client
+flask-cors
+prometheus_flask_exporter
+requests

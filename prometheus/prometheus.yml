@@ -1,7 +1,17 @@
 global:
-  scrape_interval: 5s 
+  scrape_interval: 5s
 
 scrape_configs:
-  - job_name: 'backend-server'
+  - job_name: 'cadvisor'
     static_configs:
-      - targets: ['backend:8001']
+      - targets: ['cadvisor:8080']
+
+  - job_name: 'flask-fixed'
+    static_configs:
+      - targets: ['backend:5000']
+
+  - job_name: 'flask-autoscaled'
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/targets/flask.json
+        refresh_interval: 5s
