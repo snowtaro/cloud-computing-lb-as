@@ -46,7 +46,8 @@ class DockerManager:
         container = self.client.containers.run(
             image,
             labels={'autoscale_service': label},
-            detach=True
+            detach=True,
+            ports={'5000/tcp': None}
         )
         self.update_prometheus_targets(label)
         return container

@@ -29,82 +29,64 @@ class AutoScaler:
         self.max = max_instances
         self.interval = check_interval
 
-        # Timestamps tracking when thresholds were first breached
-        self.above_since = None  # for scale-out
-        self.below_since = None  # for scale-in
+        self.above_since = None
+        self.below_since = None
 
     def scale(self) -> None:
         containers = self.dock.list_containers(self.label)
         count = len(containers)
 
-        # Ensure minimum instances immediately
-
         if count < self.min:
             logging.info(f"Instances below minimum ({count} < {self.min}). Scaling up.")
             self.dock.run_container(self.image, self.label)
-            # reset timers
             self.above_since = None
             self.below_since = None
             return
 
-        # Calculate normalized average CPU usage per core
         num_cpus = multiprocessing.cpu_count()
         usages = [self.dock.get_container_cpu(c) for c in containers]
         raw_avg = sum(usages) / count if usages else 0.0
-        avg_cpu = raw_avg / num_cpus
+        normalized_avg = raw_avg / 100
+
         logging.info(
-            f"Average CPU usage: {avg_cpu:.2f}% across {count} containers "
-            f"(normalized to single-core %)"
+            f"Avg CPU: {normalized_avg * 100:.2f}% of total {num_cpus} cores "
+            f"across {count} containers"
         )
 
         now = time.time()
 
-        # --- Scale-out logic: CPU > threshold for ≥ 3 minutes ---
-        if avg_cpu > (self.threshold * 100):
+        # --- Scale-out logic ---
+        if normalized_avg > self.threshold:
             if self.above_since is None:
                 self.above_since = now
                 logging.debug("CPU above threshold, starting timer for scale-out.")
-            elif now - self.above_since >= 3 * 60 and count < self.max:
+            elif now - self.above_since >= 180 and count < self.max:
                 logging.info("CPU above threshold for ≥ 3 minutes. Scaling up by 1.")
                 self.dock.run_container(self.image, self.label)
-                # reset both timers after action
                 self.above_since = None
                 self.below_since = None
         else:
-            # reset if momentarily dropped below threshold
             if self.above_since is not None:
                 logging.debug("CPU dropped below threshold, resetting scale-out timer.")
             self.above_since = None
 
-        # --- Scale-in logic: CPU < threshold/2 for ≥ 1 minute ---
-        if avg_cpu < (self.threshold * 50):
+        # --- Scale-in logic ---
+        if normalized_avg < self.threshold / 2:
             if self.below_since is None:
                 self.below_since = now
                 logging.debug("CPU below half-threshold, starting timer for scale-in.")
-            elif now - self.below_since >= 1 * 60 and count > self.min:
+            elif now - self.below_since >= 60 and count > self.min:
                 logging.info("CPU below half-threshold for ≥ 1 minute. Scaling down by 1.")
-                to_remove = containers[-1]
-                self.dock.remove_container(to_remove)
-                # reset both timers after action
+                for c in reversed(containers):
+                    if not self.dock._is_fixed(c):
+                        self.dock.remove_container(c)
+                        break
                 self.above_since = None
                 self.below_since = None
         else:
-            # reset if CPU rises above scale-in boundary
             if self.below_since is not None:
                 logging.debug("CPU rose above half-threshold, resetting scale-in timer.")
             self.below_since = None
-        if avg_cpu > (self.threshold * 100) and count < self.max:
-            logging.info("CPU above threshold. Scaling up by 1.")
-            self.dock.run_container(self.image, self.label)
-
-        elif avg_cpu < (self.threshold * 50) and count > self.min:
-            logging.info("CPU below half threshold. Scaling down by 1.")
-            for c in reversed(containers):
-                if not self.dock._is_fixed(c):
-                    self.dock.remove_container(c)
-                    break
-            else:
-                logging.info("No removable container found (only fixed ones).")
 
     def run(self) -> None:
         logging.info("Starting AutoScaler loop.")

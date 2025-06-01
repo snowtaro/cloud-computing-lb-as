@@ -83,7 +83,6 @@ def send_http_load_loop(increasing, active):
     print("💤 Load generator stopped.")
     active.value = False
 
-
 @app.route('/cpu/toggle', methods=['POST'])
 def cpu_toggle():
     global load_process, increasing, active
@@ -97,8 +96,11 @@ def cpu_toggle():
         increasing.value = False
         active.value = False
         if load_process is not None:
-            load_process.join(timeout=1)
+            load_process.terminate()
+            load_process.join()
+            load_process = None
         return "stopped"
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
