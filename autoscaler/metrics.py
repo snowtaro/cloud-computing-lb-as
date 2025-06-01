@@ -1,12 +1,17 @@
 import requests
 import docker
+import json
+import time
+import logging
+import os
+
+FLASK_TARGET_PATH = '/etc/prometheus/targets/flask.json'
 
 class PrometheusClient:
     def __init__(self, base_url: str):
         self.base_url = base_url.rstrip('/')
 
     def get_metric(self, query: str) -> float:
-        """Query Prometheus HTTP API and return the first value"""
         url = f"{self.base_url}/api/v1/query"
         resp = requests.get(url, params={'query': query})
         resp.raise_for_status()
@@ -20,24 +25,60 @@ class DockerManager:
         self.client = docker.from_env()
 
     def list_containers(self, label: str):
-        return self.client.containers.list(filters={'label': label})
+        containers = self.client.containers.list(filters={'label': label})
+        for c in containers:
+            logging.debug(f"Container {c.name} ({c.short_id}) - fixed={c.labels.get('fixed')}")
+        return containers
 
     def run_container(self, image: str, label: str):
-        return self.client.containers.run(
+        labels = {'autoscale_service': label}
+        existing = self.list_containers(label)
+        if not any(self._is_fixed(c) for c in existing):
+            labels['fixed'] = 'true'
+        container = self.client.containers.run(
             image,
-            labels={'autoscale_service': label},
+            labels=labels,
+            ports={'5000/tcp': None},
             detach=True
         )
+        self.update_prometheus_targets(label)
+        return container
 
-    def remove_container(self, container) -> None:
+    def remove_container(self, container):
+        if self._is_fixed(container):
+            logging.info(f"Skipping fixed container: {container.name} ({container.short_id})")
+            return
+        logging.info(f"Removing container: {container.name} ({container.short_id})")
         container.stop()
         container.remove()
+        self.update_prometheus_targets(container.labels.get('autoscale_service'))
 
-    def get_container_cpu(self, container) -> float:
-        stats = container.stats(stream=False)
-        cpu_delta = stats['cpu_stats']['cpu_usage']['total_usage'] - stats['precpu_stats']['cpu_usage']['total_usage']
-        system_delta = stats['cpu_stats']['system_cpu_usage'] - stats['precpu_stats']['system_cpu_usage']
-        if system_delta > 0.0:
-            num_cpus = len(stats['cpu_stats']['cpu_usage'].get('percpu_usage', []))
+    def get_container_cpu(self, container):
+        stats_stream = container.stats(stream=True, decode=True)
+        first = next(stats_stream)
+        time.sleep(1)
+        second = next(stats_stream)
+
+        cpu_delta = second['cpu_stats']['cpu_usage']['total_usage'] - first['cpu_stats']['cpu_usage']['total_usage']
+        system_delta = second['cpu_stats']['system_cpu_usage'] - first['cpu_stats']['system_cpu_usage']
+
+        if system_delta > 0.0 and cpu_delta > 0.0:
+            num_cpus = len(second['cpu_stats']['cpu_usage'].get('percpu_usage', [])) or 1
             return (cpu_delta / system_delta) * num_cpus * 100.0
         return 0.0
+
+    def update_prometheus_targets(self, label: str):
+        containers = self.list_containers(label)
+        targets = ["host.docker.internal:5000"]
+        for c in containers:
+            ports = c.attrs['NetworkSettings']['Ports']
+            if '5000/tcp' in ports and ports['5000/tcp']:
+                host_port = ports['5000/tcp'][0]['HostPort']
+                if host_port != "5000":
+                    targets.append(f"host.docker.internal:{host_port}")
+        os.makedirs(os.path.dirname(FLASK_TARGET_PATH), exist_ok=True)
+        with open(FLASK_TARGET_PATH, 'w') as f:
+            json.dump([{"targets": targets, "labels": {"job": "flask-autoscaled"}}], f)
+
+    def _is_fixed(self, container) -> bool:
+        return str(container.labels.get('fixed')).lower() == 'true'

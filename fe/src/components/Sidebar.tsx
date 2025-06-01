@@ -1,5 +1,3 @@
-import React from 'react';
-
 type Props = {
   onSelect: (menu: string) => void;
   selected: string | null;

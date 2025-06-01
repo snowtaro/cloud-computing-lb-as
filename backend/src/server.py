@@ -1,26 +1,41 @@
 from flask import Flask
-from prometheus_client import start_http_server, Counter
+from prometheus_client import Counter
 from flask_cors import CORS 
+from prometheus_flask_exporter import PrometheusMetrics
+from multiprocessing import Process
+import os
 
 app = Flask(__name__)
-CORS(app) 
-
+CORS(app)
+metrics = PrometheusMetrics(app)
 
 REQUEST_COUNT = Counter('http_requests_total', 'Total HTTP Requests')
 
-@app.route('/')
-def hello():
-    REQUEST_COUNT.inc()
-    return "Hello, this is the backend server!"
+running = False
+load_processes = []
+
+def load():
+    while True:
+        _ = sum(i * i for i in range(10000))
+
+@app.route('/cpu/toggle', methods=['POST'])
+def cpu_toggle():
+    global running, load_processes
+    if not running:
+        running = True
+        load_processes = []
+        for _ in range(os.cpu_count()):
+            p = Process(target=load)
+            p.daemon = True
+            p.start()
+            load_processes.append(p)
+        return "started"
+    else:
+        running = False
+        for p in load_processes:
+            p.terminate()
+        load_processes = []
+        return "stopped"
 
 if __name__ == '__main__':
-    from threading import Thread
-    # 8001 포트에 Prometheus 메트릭 서버 따로 띄우기
-    start_http_server(8001)
-
-    # Flask 서버는 별도 스레드로 돌린다
-    def run_flask():
-        app.run(host='0.0.0.0', port=5000)
-
-    flask_thread = Thread(target=run_flask)
-    flask_thread.start()
+    app.run(host='0.0.0.0', port=5000)

@@ -1,10 +1,4 @@
-import React from 'react';
-
-type Props = {
-  
-};
-
-const Overview = ({}: Props) => {
+const Overview = () => {
   return (
     <div>
       

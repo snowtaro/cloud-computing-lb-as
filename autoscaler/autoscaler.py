@@ -4,16 +4,13 @@ import os
 from metrics import PrometheusClient, DockerManager
 
 class AutoScaler:
-    """
-    Autoscaler periodically checks container CPU usage and scales up/down.
-    """
     def __init__(
         self,
         prom_url: str,
         docker_image: str,
         label: str = 'autoscale_service',
         cpu_threshold: float = 0.7,
-        min_instances: int = 1,
+        min_instances: int = 0,
         max_instances: int = 10,
         check_interval: int = 30
     ):
@@ -29,26 +26,28 @@ class AutoScaler:
     def scale(self) -> None:
         containers = self.dock.list_containers(self.label)
         count = len(containers)
-        # Ensure minimum instances
+
         if count < self.min:
             logging.info(f"Instances below minimum ({count} < {self.min}). Scaling up.")
             self.dock.run_container(self.image, self.label)
             return
 
-        # Calculate average CPU usage
         usages = [self.dock.get_container_cpu(c) for c in containers]
         avg_cpu = sum(usages) / count if usages else 0.0
         logging.info(f"Average CPU usage: {avg_cpu:.2f}% across {count} containers.")
 
-        # Scale up
         if avg_cpu > (self.threshold * 100) and count < self.max:
             logging.info("CPU above threshold. Scaling up by 1.")
             self.dock.run_container(self.image, self.label)
-        # Scale down
+
         elif avg_cpu < (self.threshold * 50) and count > self.min:
             logging.info("CPU below half threshold. Scaling down by 1.")
-            to_remove = containers[-1]
-            self.dock.remove_container(to_remove)
+            for c in reversed(containers):
+                if not self.dock._is_fixed(c):
+                    self.dock.remove_container(c)
+                    break
+            else:
+                logging.info("No removable container found (only fixed ones).")
 
     def run(self) -> None:
         logging.info("Starting AutoScaler loop.")
