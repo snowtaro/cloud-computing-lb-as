@@ -3,19 +3,13 @@ import logging
 import os
 import multiprocessing
 from metrics import PrometheusClient, DockerManager, clear_prometheus_targets
-
 class AutoScaler:
-    """
-    Autoscaler periodically checks container CPU usage and scales up/down.
-    - scale-out only if CPU > threshold for at least 3 minutes
-    - scale-in only if CPU < threshold/2 for at least 1 minute
-    """
     def __init__(
         self,
         prom_url: str,
         docker_image: str,
         label: str = 'autoscale_service',
-        cpu_threshold: float = 0.7,
+        cpu_threshold: float = 0.5,
         min_instances: int = 0,
         max_instances: int = 10,
         check_interval: int = 30
@@ -34,6 +28,7 @@ class AutoScaler:
 
     def scale(self) -> None:
         containers = self.dock.list_containers(self.label)
+        autoscaled_containers = [c for c in containers if not self.dock._is_fixed(c)]
         count = len(containers)
 
         if count < self.min:
@@ -43,52 +38,41 @@ class AutoScaler:
             self.below_since = None
             return
 
-        num_cpus = multiprocessing.cpu_count()
         usages = [self.dock.get_container_cpu(c) for c in containers]
         raw_avg = sum(usages) / count if usages else 0.0
         normalized_avg = raw_avg / 100
 
         logging.info(
-            f"Avg CPU: {normalized_avg * 100:.2f}% of total {num_cpus} cores "
-            f"across {count} containers"
+            f"Avg CPU: {normalized_avg * 100:.2f}% across {count} containers"
         )
 
         now = time.time()
 
-        # --- Scale-out logic ---
         if normalized_avg > self.threshold:
             if self.above_since is None:
                 self.above_since = now
                 logging.debug("CPU above threshold, starting timer for scale-out.")
-            elif now - self.above_since >= 180 and count < self.max:
-                logging.info("CPU above threshold for ≥ 3 minutes. Scaling up by 1.")
+            elif now - self.above_since >= 30 and count < self.max:
+                logging.info("CPU above threshold for ≥ 2 minutes. Scaling up by 1.")
                 self.dock.run_container(self.image, self.label)
                 self.above_since = None
                 self.below_since = None
         else:
-            if self.above_since is not None:
-                logging.debug("CPU dropped below threshold, resetting scale-out timer.")
             self.above_since = None
 
-        # --- Scale-in logic ---
         if normalized_avg < self.threshold / 2:
             if self.below_since is None:
                 self.below_since = now
                 logging.debug("CPU below half-threshold, starting timer for scale-in.")
-            elif now - self.below_since >= 60 and count > self.min:
-                target = next((c for c in reversed(containers) if not self.dock._is_fixed(c)), None)
-
-                if target:
-                    logging.info(f"CPU below half-threshold for ≥ 1 minute. Scaling down container: {target.name}")
-                    self.dock.remove_container(target)
-                else:
-                    logging.info("CPU below half-threshold, but no removable container found (all fixed).")
-
+            elif now - self.below_since >= 15 and len(autoscaled_containers) > 0:
+                target = autoscaled_containers[-1]
+                logging.info(f"CPU below half-threshold for ≥ 1 minute. Scaling down container: {target.name}")
+                self.dock.remove_container(target)
                 self.above_since = None
                 self.below_since = None
+            elif now - self.below_since >= 30:
+                logging.info("CPU below half-threshold, but no removable container found (all fixed).")
         else:
-            if self.below_since is not None:
-                logging.debug("CPU rose above half-threshold, resetting scale-in timer.")
             self.below_since = None
 
     def run(self) -> None:

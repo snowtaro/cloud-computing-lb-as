@@ -24,6 +24,9 @@ services:
         - prometheus
       volumes:
         - /var/run/docker.sock:/var/run/docker.sock
+      networks:
+        - mynet
+
   prometheus:
     image: prom/prometheus
     volumes:
@@ -45,7 +48,7 @@ services:
     environment:
       - PROM_URL=http://prometheus:9090
       - DOCKER_IMAGE=backend
-      - CPU_THRESHOLD=0.7
+      - CPU_THRESHOLD=0.5
       - MIN_INSTANCES=0
       - MAX_INSTANCES=3
       - CHECK_INTERVAL=10

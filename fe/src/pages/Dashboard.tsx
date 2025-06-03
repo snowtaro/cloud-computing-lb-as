@@ -6,7 +6,7 @@ const Dashboard = () => {
     const [activeMenu, setActiveMenu] = useState<string | null>('overview');
     const [status, setStatus] = useState('상태: 대기 중');
     const [isStressOn, setIsStressOn] = useState(false);
-    const [isLoading, setIsLoading] = useState(false); 
+    const [isLoading, setIsLoading] = useState(false);
 
     const handleMenuClick = (menu: string) => {
         if (menu === 'test') {
@@ -17,14 +17,10 @@ const Dashboard = () => {
     };
 
     const toggleStressTest = async () => {
-        setIsLoading(true);  // ✅ 로딩 시작
+        setIsLoading(true);
 
         try {
-            if (isStressOn) {
-                setStatus('⏳ 부하 중지 중...');
-            } else {
-                setStatus('⚡ 부하 시작 중...');
-            }
+            setStatus(isStressOn ? '⏳ 부하 중지 중...' : '⚡ 부하 시작 중...');
 
             const res = await fetch('http://localhost:5000/cpu/toggle', {
                 method: 'POST',

@@ -1,1 +1,1 @@
-[{"targets": [], "labels": {"job": "flask-autoscaled"}}]
+[{"targets": ["autoscale_service-9b80e:5000", "autoscale_service-e6f3e:5000"], "labels": {"job": "flask-autoscaled"}}]
