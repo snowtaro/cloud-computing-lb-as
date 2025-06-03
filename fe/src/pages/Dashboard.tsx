@@ -6,6 +6,7 @@ const Dashboard = () => {
     const [activeMenu, setActiveMenu] = useState<string | null>('overview');
     const [status, setStatus] = useState('상태: 대기 중');
     const [isStressOn, setIsStressOn] = useState(false);
+    const [isLoading, setIsLoading] = useState(false); 
 
     const handleMenuClick = (menu: string) => {
         if (menu === 'test') {
@@ -16,7 +17,15 @@ const Dashboard = () => {
     };
 
     const toggleStressTest = async () => {
+        setIsLoading(true);  // ✅ 로딩 시작
+
         try {
+            if (isStressOn) {
+                setStatus('⏳ 부하 중지 중...');
+            } else {
+                setStatus('⚡ 부하 시작 중...');
+            }
+
             const res = await fetch('http://localhost:5000/cpu/toggle', {
                 method: 'POST',
             });
@@ -34,6 +43,8 @@ const Dashboard = () => {
         } catch (err) {
             setStatus('❌ 에러 발생');
             console.error(err);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -43,6 +54,7 @@ const Dashboard = () => {
                 onSelect={handleMenuClick}
                 selected={activeMenu}
                 isStressOn={isStressOn}
+                isLoading={isLoading}
             />
             <main className="flex-1 p-8 overflow-y-auto">
                 <div className="bg-white p-6 rounded shadow">

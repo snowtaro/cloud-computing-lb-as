@@ -47,7 +47,8 @@ class DockerManager:
             image,
             labels={'autoscale_service': label},
             detach=True,
-            ports={'5000/tcp': None}
+            ports={'5000/tcp': None},
+            network='pnu_cloud_computing_mynet'
         )
         self.update_prometheus_targets(label)
         return container
@@ -94,3 +95,8 @@ class DockerManager:
 
     def _is_fixed(self, container) -> bool:
         return str(container.labels.get('fixed')).lower() == 'true'
+
+def clear_prometheus_targets():
+    os.makedirs(os.path.dirname(FLASK_TARGET_PATH), exist_ok=True)
+    with open(FLASK_TARGET_PATH, 'w') as f:
+            json.dump([{"targets": [], "labels": {"job": "flask-autoscaled"}}], f)

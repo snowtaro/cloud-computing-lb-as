@@ -2,7 +2,7 @@ import time
 import logging
 import os
 import multiprocessing
-from metrics import PrometheusClient, DockerManager
+from metrics import PrometheusClient, DockerManager, clear_prometheus_targets
 
 class AutoScaler:
     """
@@ -76,11 +76,14 @@ class AutoScaler:
                 self.below_since = now
                 logging.debug("CPU below half-threshold, starting timer for scale-in.")
             elif now - self.below_since >= 60 and count > self.min:
-                logging.info("CPU below half-threshold for ≥ 1 minute. Scaling down by 1.")
-                for c in reversed(containers):
-                    if not self.dock._is_fixed(c):
-                        self.dock.remove_container(c)
-                        break
+                target = next((c for c in reversed(containers) if not self.dock._is_fixed(c)), None)
+
+                if target:
+                    logging.info(f"CPU below half-threshold for ≥ 1 minute. Scaling down container: {target.name}")
+                    self.dock.remove_container(target)
+                else:
+                    logging.info("CPU below half-threshold, but no removable container found (all fixed).")
+
                 self.above_since = None
                 self.below_since = None
         else:
@@ -103,6 +106,7 @@ if __name__ == '__main__':
         format='%(asctime)s [%(levelname)s] %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
+    clear_prometheus_targets()
     prom_url = os.getenv('PROM_URL', 'http://localhost:8001')
     docker_img = os.getenv('DOCKER_IMAGE', '')
     min_i = int(os.getenv('MIN_INSTANCES', 1))
