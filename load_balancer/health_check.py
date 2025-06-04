@@ -1,9 +1,11 @@
 import docker
 import time
+import requests
 from balancer import update_backend_servers
 
 def check_servers(label='autoscale_service'):
     client = docker.from_env()
+    
     while True:
         containers = client.containers.list(filters={"label": label, "status": "running"})
         servers = []
@@ -17,7 +19,6 @@ def check_servers(label='autoscale_service'):
         # 서버 상태 점검
         for server in servers:
             try:
-                import requests
                 start = time.time()
                 resp = requests.get(server['host'] + '/health', timeout=2)
                 end = time.time()
@@ -26,14 +27,14 @@ def check_servers(label='autoscale_service'):
                     server['latency'] = end - start
                 else:
                     server['status'] = 'unhealthy'
-            except:
+            except Exception as e:
+                print(f"[ERROR] Health check failed: {e}")
                 server['status'] = 'unhealthy'
                 server['latency'] = float('inf')
                 
         update_backend_servers(servers)
-        print(f"Updated backend servers: {servers}")
+        print(f"✅ Updated backend servers: {servers}")
         
-        return servers
         time.sleep(30)
 
 def start_health_check():

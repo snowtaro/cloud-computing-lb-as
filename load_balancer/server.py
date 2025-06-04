@@ -1,25 +1,26 @@
 from flask import Flask, request
-from balancer import choose_backend, selection_mode
+from balancer import choose_backend
+import requests
 
 app = Flask(__name__)
 
-@app.route('/load')
+@app.route('/load', methods=['POST'])
 def route_request():
     server = choose_backend()
     if not server:
         return "No healthy servers", 503
     try:
-        import requests
-        resp = requests.get(server['host'])
+        resp = requests.post(f"{server['host']}/load", data=request.data, headers=request.headers)
         return resp.content, resp.status_code
-    except:
+    except Exception as e:
+        print(f"Error forwarding to backend: {e}")
         return "Backend error", 500
-
+    
 @app.route('/set_mode/<mode>')
 def set_mode(mode):
-    from balancer import selection_mode
+    import balancer
     if mode in ['round_robin', 'latency']:
-        selection_mode = mode
+        balancer.selection_mode = mode
         return f"Selection mode set to {mode}", 200
     else:
         return "Invalid mode", 400
