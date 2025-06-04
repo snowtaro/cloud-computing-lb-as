@@ -3,7 +3,7 @@ from balancer import choose_backend, selection_mode
 
 app = Flask(__name__)
 
-@app.route('/')
+@app.route('/load')
 def route_request():
     server = choose_backend()
     if not server:
