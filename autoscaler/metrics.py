@@ -23,16 +23,18 @@ class PrometheusClient:
     
     def get_avg_cpu_usage(self, label: str) -> float:
         query = (
-            'avg('
-            'rate('
-            'container_cpu_usage_seconds_total'
-            '{job="cadvisor"}'
-            '[1m]'
-            ')'
-            ')*100'
+            'sum(rate(container_cpu_usage_seconds_total{job="cadvisor"}[1m]) * 0.01)'
         )
-
         return self.get_metric(query)
+    
+    def get_container_count(self, label: str) -> int:
+        query = (
+            'count('
+            'container_memory_usage_bytes'
+            '{job="cadvisor",container_label_autoscale_service="' + label + '"}'
+            ')'
+        )
+        return int(self.get_metric(query))
 
 class DockerManager:
     def __init__(self):

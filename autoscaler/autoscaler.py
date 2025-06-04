@@ -42,16 +42,15 @@ class AutoScaler:
             self.above_since = None
             self.below_since = None
             return
-
-        # count cpu
-        try:
-            normalized_avg = self.prom.get_avg_cpu_usage(self.label)
-        except Exception as e:
-            logging.error(f"Failed to query Prometheus: {e}")
-            return
+        
+        num_cpus = multiprocessing.cpu_count()
+        usages = [self.dock.get_container_cpu(c) for c in containers]
+        raw_avg = sum(usages) / count if usages else 0.0
+        normalized_avg = raw_avg / 100
 
         logging.info(
-            f"Avg CPU: {normalized_avg * 100:.2f}% across {count} containers"
+            f"Avg CPU: {normalized_avg * 100:.2f}% of total {num_cpus} cores "
+            f"across {count} containers"
         )
 
         now = time.time()
@@ -68,7 +67,7 @@ class AutoScaler:
         else:
             self.above_since = None
 
-        if normalized_avg < self.threshold / 2:
+        if normalized_avg < self.threshold * 0.5:
             if self.below_since is None:
                 self.below_since = now
                 logging.debug("CPU below half-threshold, starting timer for scale-in.")
