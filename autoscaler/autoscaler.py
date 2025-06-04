@@ -46,16 +46,16 @@ class AutoScaler:
         num_cpus = multiprocessing.cpu_count()
         usages = [self.dock.get_container_cpu(c) for c in containers]
         raw_avg = sum(usages) / count if usages else 0.0
-        normalized_avg = raw_avg / 100
+        avg_cpu = raw_avg / num_cpus
 
         logging.info(
-            f"Avg CPU: {normalized_avg * 100:.2f}% of total {num_cpus} cores "
+            f"Avg CPU: {avg_cpu:.2f}% (per core) "
             f"across {count} containers"
         )
 
         now = time.time()
 
-        if normalized_avg > self.threshold:
+        if avg_cpu > (self.threshold*100):
             if self.above_since is None:
                 self.above_since = now
                 logging.debug("CPU above threshold, starting timer for scale-out.")
@@ -67,7 +67,7 @@ class AutoScaler:
         else:
             self.above_since = None
 
-        if normalized_avg < self.threshold * 0.5:
+        if avg_cpu < (self.threshold * 50):
             if self.below_since is None:
                 self.below_since = now
                 logging.debug("CPU below half-threshold, starting timer for scale-in.")
