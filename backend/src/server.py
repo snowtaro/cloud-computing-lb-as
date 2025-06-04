@@ -13,7 +13,7 @@ CORS(app)
 metrics = PrometheusMetrics(app, group_by='endpoint')
 load_request_counter = Counter("load_requests_total", "Total /load POST requests")
 
-TARGET_URL = "http://127.0.0.1:5000/load"
+TARGET_URL = "http://localhost:5000/load"
 
 # 전역 상태
 manager = Manager()

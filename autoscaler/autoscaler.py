@@ -2,7 +2,11 @@ import time
 import logging
 import os
 import multiprocessing
+import signal, sys, docker, json
+
 from metrics import PrometheusClient, DockerManager, clear_prometheus_targets
+
+
 class AutoScaler:
     def __init__(
         self,
@@ -97,6 +101,31 @@ if __name__ == '__main__':
     max_i = int(os.getenv('MAX_INSTANCES', 10))
     cpu_th = float(os.getenv('CPU_THRESHOLD', 0.7))
     interval = int(os.getenv('CHECK_INTERVAL', 30))
+
+    def graceful_shutdown(signum, frame):
+        print("📦 Shutting down autoscaler...")
+
+        # 1. Docker에서 autoscale_service-* 컨테이너 삭제
+        client = docker.from_env()
+        for container in client.containers.list(all=True):
+            if container.name.startswith("autoscale_service-"):
+                print(f"🗑 Removing container {container.name}")
+                try:
+                    container.remove(force=True)
+                except Exception as e:
+                    print(f"❌ Failed to remove {container.name}: {e}")
+
+        # 2. flask.json 초기화
+        try:
+            flask_json_path = "/app/prometheus/targets/flask.json"
+            if os.path.exists(flask_json_path):
+                with open(flask_json_path, "w") as f:
+                    json.dump([], f)
+                print("🧹 flask.json cleared")
+        except Exception as e:
+            print(f"❌ Failed to clear flask.json: {e}")
+
+        sys.exit(0)
 
     scaler = AutoScaler(
         prom_url,
