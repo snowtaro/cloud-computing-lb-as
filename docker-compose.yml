@@ -48,10 +48,10 @@ services:
     environment:
       - PROM_URL=http://prometheus:9090
       - DOCKER_IMAGE=backend
-      - CPU_THRESHOLD=0.5
-      - MIN_INSTANCES=0
+      - CPU_THRESHOLD=0.7
+      - MIN_INSTANCES=1
       - MAX_INSTANCES=3
-      - CHECK_INTERVAL=10
+      - CHECK_INTERVAL=3
     networks:
       - mynet
 

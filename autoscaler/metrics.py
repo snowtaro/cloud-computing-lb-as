@@ -20,6 +20,19 @@ class PrometheusClient:
         if data.get('status') != 'success' or not data['data']['result']:
             return 0.0
         return float(data['data']['result'][0]['value'][1])
+    
+    def get_avg_cpu_usage(self, label: str) -> float:
+        query = (
+            'avg('
+            'rate('
+            'container_cpu_usage_seconds_total'
+            '{job="cadvisor"}'
+            '[1m]'
+            ')'
+            ')*100'
+        )
+
+        return self.get_metric(query)
 
 class DockerManager:
     def __init__(self):

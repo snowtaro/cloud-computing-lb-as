@@ -13,10 +13,10 @@ class AutoScaler:
         prom_url: str,
         docker_image: str,
         label: str = 'autoscale_service',
-        cpu_threshold: float = 0.5,
-        min_instances: int = 0,
+        cpu_threshold: float = 0.7,
+        min_instances: int = 1,
         max_instances: int = 10,
-        check_interval: int = 30
+        check_interval: int = 10
     ):
         self.prom = PrometheusClient(prom_url)
         self.dock = DockerManager()
@@ -35,6 +35,7 @@ class AutoScaler:
         autoscaled_containers = [c for c in containers if not self.dock._is_fixed(c)]
         count = len(containers)
 
+        # under min instances
         if count < self.min:
             logging.info(f"Instances below minimum ({count} < {self.min}). Scaling up.")
             self.dock.run_container(self.image, self.label)
@@ -42,9 +43,12 @@ class AutoScaler:
             self.below_since = None
             return
 
-        usages = [self.dock.get_container_cpu(c) for c in containers]
-        raw_avg = sum(usages) / count if usages else 0.0
-        normalized_avg = raw_avg / 100
+        # count cpu
+        try:
+            normalized_avg = self.prom.get_avg_cpu_usage(self.label)
+        except Exception as e:
+            logging.error(f"Failed to query Prometheus: {e}")
+            return
 
         logging.info(
             f"Avg CPU: {normalized_avg * 100:.2f}% across {count} containers"
@@ -88,6 +92,7 @@ class AutoScaler:
                 logging.error(f"Error during scaling: {e}")
             time.sleep(self.interval)
 
+
 if __name__ == '__main__':
     logging.basicConfig(
         level=logging.INFO,
@@ -95,7 +100,7 @@ if __name__ == '__main__':
         datefmt='%Y-%m-%d %H:%M:%S'
     )
     clear_prometheus_targets()
-    prom_url = os.getenv('PROM_URL', 'http://localhost:8001')
+    prom_url = os.getenv('PROM_URL', 'http://localhost:9090')
     docker_img = os.getenv('DOCKER_IMAGE', '')
     min_i = int(os.getenv('MIN_INSTANCES', 1))
     max_i = int(os.getenv('MAX_INSTANCES', 10))
